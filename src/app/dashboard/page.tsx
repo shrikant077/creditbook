@@ -16,7 +16,7 @@ export default async function DashboardPage() {
   }
 
   const { data: customers } = await supabase.from("customers")
-    .select("id,name,phone_e164,created_at,user_id")
+    .select("id,name,email,phone_e164,created_at,user_id")
     .eq("store_id", store.id).order("created_at", { ascending: false });
   const rows = await Promise.all((customers ?? []).map(async (customer) => {
     const { data: balance } = await supabase.rpc("get_customer_balance", { p_customer_id: customer.id });
@@ -34,10 +34,10 @@ export default async function DashboardPage() {
         <div className="stat"><span>Customers</span><strong>{rows.length}</strong></div>
         <div className="stat"><span>Customers with dues</span><strong>{owingCustomers}</strong></div>
       </div>
-      <section className="panel"><div className="panel-head"><div><h2>Add a customer</h2><p className="muted text-small">Register their phone number and share their private access code.</p></div></div><AddCustomerForm storeId={store.id} /></section>
+      <section className="panel"><div className="panel-head"><div><h2>Add a customer</h2><p className="muted text-small">Register their email and phone number. They will verify their email and use the access code to link their account.</p></div></div><AddCustomerForm storeId={store.id} /></section>
       <section className="panel"><div className="panel-head"><div><h2>Customers</h2><p className="muted text-small">Select a customer to view their ledger and add credit.</p></div><span className="pill">{rows.length} total</span></div>
-        {rows.length === 0 ? <div className="empty"><strong>No customers yet</strong>Add your first customer using the form above.</div> : <div className="table-wrap"><table className="table"><thead><tr><th>Customer</th><th>Phone</th><th>Account</th><th>Outstanding</th><th></th></tr></thead><tbody>
-          {rows.map(customer => <tr key={customer.id}><td><Link className="customer-link" href={`/dashboard/customers/${customer.id}`}>{customer.name}</Link></td><td>{customer.phone_e164}</td><td>{customer.user_id ? <span className="pill">Linked</span> : <span className="muted text-small">Not claimed</span>}</td><td className="amount">{formatINR(customer.balance)}</td><td><Link href={`/dashboard/customers/${customer.id}`} className="btn secondary small">Open</Link></td></tr>)}
+        {rows.length === 0 ? <div className="empty"><strong>No customers yet</strong>Add your first customer using the form above.</div> : <div className="table-wrap"><table className="table"><thead><tr><th>Customer</th><th>Email</th><th>Phone</th><th>Account</th><th>Outstanding</th><th></th></tr></thead><tbody>
+          {rows.map(customer => <tr key={customer.id}><td><Link className="customer-link" href={`/dashboard/customers/${customer.id}`}>{customer.name}</Link></td><td>{customer.email ?? "—"}</td><td>{customer.phone_e164}</td><td>{customer.user_id ? <span className="pill">Linked</span> : <span className="muted text-small">Not claimed</span>}</td><td className="amount">{formatINR(customer.balance)}</td><td><Link href={`/dashboard/customers/${customer.id}`} className="btn secondary small">Open</Link></td></tr>)}
         </tbody></table></div>}
       </section>
     </main>

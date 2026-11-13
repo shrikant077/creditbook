@@ -13,19 +13,20 @@ export async function claimCustomerRecordAction(_previous: ActionState, formData
     const { data, error } = await supabase.auth.getUser();
     const user = data.user;
     if (error || !user) return { error: "Please sign in again." };
-    if (!user.phone || !user.phone_confirmed_at) return { error: "A verified phone number is required to claim a store record." };
+    if (!user.email || !user.email_confirmed_at) return { error: "A verified email address is required to claim a store record." };
     const code = claimCodeSchema.safeParse(formData.get("claimCode"));
     if (!code.success) return { error: "Enter the 8-digit access code." };
 
-    const digest = hashClaimCode(user.phone, code.data);
+    const email = user.email.trim().toLowerCase();
+    const digest = hashClaimCode(email, code.data);
     const admin = createAdminClient();
     const { data: customerId, error: claimError } = await admin.rpc("claim_customer_record", {
-      p_phone_e164: user.phone,
+      p_email: email,
       p_claim_hash: digest,
       p_user_id: user.id
     });
     if (claimError) throw claimError;
-    if (!customerId) return { error: "That code is invalid or expired, or too many attempts were made. Check the number and try again later." };
+    if (!customerId) return { error: "That code is invalid or expired, or too many attempts were made. Check the email address and try again later." };
     revalidatePath("/account");
     return { success: "Store account linked. Your credit ledger is now available." };
   } catch (error) {

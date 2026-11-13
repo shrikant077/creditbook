@@ -3,14 +3,13 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { formatINR } from "@/lib/money";
 import { TransactionList } from "@/components/transaction-list";
-import { PayNowButton } from "@/components/pay-now-button";
 import { LogoutButton } from "@/components/logout-button";
 
 export default async function CustomerLedgerPage({ params }: { params: Promise<{ customerId: string }> }) {
   const { customerId } = await params;
   const { supabase, user } = await requireUser();
   const { data: customer, error } = await supabase.from("customers")
-    .select("id,name,phone_e164,store_id,stores(name)")
+    .select("id,name,email,phone_e164,store_id,stores(name)")
     .eq("id", customerId).eq("user_id", user.id).maybeSingle();
   if (error || !customer) notFound();
   const [{ data: credits }, { data: payments }, { data: balance }] = await Promise.all([
@@ -29,11 +28,11 @@ export default async function CustomerLedgerPage({ params }: { params: Promise<{
       <div className="two-col" style={{ alignItems: "start" }}>
         <div>
           <div className="balance-card"><span>Outstanding balance</span><strong>{formatINR(due)}</strong><small>Updated from verified credits and payments</small></div>
-          <section className="panel"><h2>Make a payment</h2><p className="muted text-small">Pay the full balance or any amount towards your dues.</p><div className="divider"/>
-            {due >= 100 ? <PayNowButton customerId={customer.id} customerName={customer.name} balancePaise={due} /> : due > 0 ? <div className="notice">Your remaining balance is below the ₹1 online payment minimum. Please settle it with the store.</div> : <div className="notice">You have no outstanding balance. Thank you!</div>}
+          <section className="panel"><h2>Make a payment</h2><p className="muted text-small">Online payments will be enabled after your store connects its own approved payment account.</p><div className="divider"/>
+            {due > 0 ? <div className="notice">Please settle your outstanding balance directly with the store for now. Your store can record the payment in CreditBook.</div> : <div className="notice">You have no outstanding balance. Thank you!</div>}
           </section>
         </div>
-        <section className="panel"><h2>Account summary</h2><div className="ledger-item"><div><div className="ledger-title">Store</div><div className="ledger-meta">Credit account</div></div><strong>{storeName}</strong></div><div className="ledger-item"><div><div className="ledger-title">Mobile number</div><div className="ledger-meta">Verified login</div></div><strong>{customer.phone_e164}</strong></div><div className="ledger-item"><div><div className="ledger-title">Credit entries</div></div><strong>{credits?.length ?? 0}</strong></div><div className="ledger-item"><div><div className="ledger-title">Payment records</div></div><strong>{payments?.filter(p => p.status === "captured").length ?? 0}</strong></div></section>
+        <section className="panel"><h2>Account summary</h2><div className="ledger-item"><div><div className="ledger-title">Store</div><div className="ledger-meta">Credit account</div></div><strong>{storeName}</strong></div><div className="ledger-item"><div><div className="ledger-title">Email address</div><div className="ledger-meta">Verified login</div></div><strong>{customer.email ?? "Not provided"}</strong></div><div className="ledger-item"><div><div className="ledger-title">Mobile number</div><div className="ledger-meta">Contact information</div></div><strong>{customer.phone_e164}</strong></div><div className="ledger-item"><div><div className="ledger-title">Credit entries</div></div><strong>{credits?.length ?? 0}</strong></div><div className="ledger-item"><div><div className="ledger-title">Payment records</div></div><strong>{payments?.filter(p => p.status === "captured").length ?? 0}</strong></div></section>
       </div>
       <section className="panel"><div className="panel-head"><div><h2>Itemised history</h2><p className="muted text-small">Every credit entry and recorded payment is shown below.</p></div></div><TransactionList credits={credits ?? []} payments={payments ?? []} /></section>
     </main>

@@ -17,9 +17,10 @@ export function AddCustomerForm({ storeId }: { storeId: string }) {
         <input type="hidden" name="storeId" value={storeId} />
         <div className="form-grid">
           <div className="field"><label htmlFor="customerName">Customer name</label><input id="customerName" name="name" required maxLength={120} placeholder="Customer's full name" /></div>
-          <div className="field"><label htmlFor="customerPhone">Mobile number (with country code)</label><input id="customerPhone" name="phone" type="tel" required placeholder="+919876543210" /></div>
+          <div className="field"><label htmlFor="customerEmail">Email address (for OTP login)</label><input id="customerEmail" name="email" type="email" autoComplete="email" required maxLength={320} placeholder="customer@example.com" /></div>
+          <div className="field"><label htmlFor="customerPhone">Mobile number (with country code)</label><input id="customerPhone" name="phone" type="tel" autoComplete="tel" required placeholder="+919876543210" /></div>
         </div>
-        <div className="form-actions"><button className="btn" type="submit" disabled={pending}>{pending ? "Adding…" : "Add customer"}</button><span className="muted text-small">Customer must use this number to sign in.</span></div>
+        <div className="form-actions"><button className="btn" type="submit" disabled={pending}>{pending ? "Adding…" : "Add customer"}</button><span className="muted text-small">Customer signs in with email; phone is saved as contact information.</span></div>
       </form>
       {state.error && <div className="notice error">{state.error}</div>}
       {state.success && <div className="notice">{state.success}</div>}
@@ -27,7 +28,7 @@ export function AddCustomerForm({ storeId }: { storeId: string }) {
         <div className="eyebrow" style={{ marginBottom: 8 }}>One-time customer access code</div>
         <div className="access-code">{state.claimCode}</div>
         <button type="button" className="btn secondary small" onClick={copyCode} style={{ marginLeft: 9 }}>{copied ? "Copied" : "Copy code"}</button>
-        <p className="muted text-small">Share this code privately. It expires in 7 days and cannot be viewed again after leaving this screen.</p>
+        <p className="muted text-small">Share this code privately with the customer. They must sign in using the registered email address. It expires in 7 days and cannot be viewed again after leaving this screen.</p>
       </div>}
     </div>
   );

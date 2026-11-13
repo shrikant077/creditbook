@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { generateClaimCode, hashClaimCode } from "@/lib/claim-code";
 import { rupeesToPaise } from "@/lib/money";
-import { customerNameSchema, descriptionSchema, phoneSchema, amountRupeesSchema, storeNameSchema } from "@/lib/validators";
+import { customerNameSchema, descriptionSchema, emailSchema, phoneSchema, amountRupeesSchema, storeNameSchema } from "@/lib/validators";
 
 export type ActionState = { error?: string; success?: string; claimCode?: string };
 
@@ -41,27 +41,66 @@ export async function addCustomerAction(_previous: ActionState, formData: FormDa
     const { supabase, user } = await getSignedInUser();
     const storeId = String(formData.get("storeId") ?? "");
     const name = customerNameSchema.safeParse(formData.get("name"));
+    const email = emailSchema.safeParse(formData.get("email"));
     const phone = phoneSchema.safeParse(formData.get("phone"));
     if (!name.success) return { error: "Enter the customer's name." };
+    if (!email.success) return { error: email.error.issues[0]?.message ?? "Enter a valid email address." };
     if (!phone.success) return { error: phone.error.issues[0]?.message ?? "Enter a valid E.164 phone number." };
     await assertStoreOwner(supabase, storeId, user.id);
 
     const claimCode = generateClaimCode();
-    const claimCodeHash = hashClaimCode(phone.data, claimCode);
+    const claimCodeHash = hashClaimCode(email.data, claimCode);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase.from("customers").insert({
       store_id: storeId,
       name: name.data,
+      email: email.data,
       phone_e164: phone.data,
       claim_code_hash: claimCodeHash,
       claim_code_expires_at: expiresAt
     });
-    if (error?.code === "23505") return { error: "A customer with this phone number already exists in this store." };
+    if (error?.code === "23505") return { error: "A customer with this email address or phone number already exists in this store." };
     if (error) throw error;
     revalidatePath("/dashboard");
     return { success: "Customer added. Share this one-time access code privately with them.", claimCode };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not add customer." };
+  }
+}
+
+export async function updateCustomerContactAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { supabase, user } = await getSignedInUser();
+    const storeId = String(formData.get("storeId") ?? "");
+    const customerId = String(formData.get("customerId") ?? "");
+    const email = emailSchema.safeParse(formData.get("email"));
+    const phone = phoneSchema.safeParse(formData.get("phone"));
+    if (!email.success) return { error: email.error.issues[0]?.message ?? "Enter a valid email address." };
+    if (!phone.success) return { error: phone.error.issues[0]?.message ?? "Enter a valid E.164 phone number." };
+    await assertStoreOwner(supabase, storeId, user.id);
+    const { data: customer, error: lookupError } = await supabase.from("customers")
+      .select("id,user_id").eq("id", customerId).eq("store_id", storeId).single();
+    if (lookupError || !customer) throw new Error("Customer not found.");
+
+    const code = generateClaimCode();
+    const hash = hashClaimCode(email.data, code);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabase.from("customers").update({
+      email: email.data,
+      phone_e164: phone.data,
+      user_id: null,
+      claim_code_hash: hash,
+      claim_code_expires_at: expiresAt
+    }).eq("id", customerId).eq("store_id", storeId);
+    if (error?.code === "23505") return { error: "A customer with this email address or phone number already exists in this store." };
+    if (error) throw error;
+    revalidatePath(`/dashboard/customers/${customerId}`);
+    revalidatePath("/dashboard");
+    revalidatePath(`/account/${customerId}`);
+    revalidatePath("/account");
+    return { success: "Customer details updated and previous portal link reset. Share the new one-time access code.", claimCode: code };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not update customer details." };
   }
 }
 
@@ -72,12 +111,13 @@ export async function issueAccessCodeAction(_previous: ActionState, formData: Fo
     const customerId = String(formData.get("customerId") ?? "");
     await assertStoreOwner(supabase, storeId, user.id);
     const { data: customer, error: customerError } = await supabase
-      .from("customers").select("id, phone_e164, user_id")
+      .from("customers").select("id, email, user_id")
       .eq("id", customerId).eq("store_id", storeId).single();
     if (customerError || !customer) throw new Error("Customer not found.");
     if (customer.user_id) return { error: "This customer has already claimed their account." };
+    if (!customer.email) return { error: "Add the customer's email address before issuing an access code." };
     const code = generateClaimCode();
-    const hash = hashClaimCode(customer.phone_e164, code);
+    const hash = hashClaimCode(customer.email, code);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase.from("customers")
       .update({ claim_code_hash: hash, claim_code_expires_at: expiresAt })

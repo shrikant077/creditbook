@@ -14,7 +14,7 @@ export function AuthPanel() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
 
   function notify(text: string, error = false) {
     setMessage(text);
@@ -54,14 +54,14 @@ export function AuthPanel() {
 
   async function sendOtp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); notify("");
-    const cleanPhone = phone.trim();
-    if (!/^\+[1-9]\d{7,14}$/.test(cleanPhone)) {
-      notify("Use international format, for example +919876543210.", true); setBusy(false); return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      notify("Enter a valid email address.", true); setBusy(false); return;
     }
     try {
-      const { error } = await supabase.auth.signInWithOtp({ phone: cleanPhone, options: { shouldCreateUser: true, channel: "sms" } });
+      const { error } = await supabase.auth.signInWithOtp({ email: cleanEmail, options: { shouldCreateUser: true } });
       if (error) throw error;
-      setOtpSent(true); notify("OTP sent. Check your SMS messages.");
+      setOtpSent(true); notify("OTP sent. Check your email inbox.");
     } catch (error) { notify(error instanceof Error ? error.message : "Could not send OTP.", true); }
     finally { setBusy(false); }
   }
@@ -71,7 +71,7 @@ export function AuthPanel() {
     const form = new FormData(event.currentTarget);
     const token = String(form.get("otp") ?? "").trim();
     try {
-      const { error } = await supabase.auth.verifyOtp({ phone: phone.trim(), token, type: "sms" });
+      const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: "email" });
       if (error) throw error;
       router.push("/account"); router.refresh();
     } catch (error) { notify(error instanceof Error ? error.message : "OTP verification failed.", true); }
@@ -108,11 +108,11 @@ export function AuthPanel() {
         ) : (
           <>
             {!otpSent ? <form onSubmit={sendOtp}>
-              <div className="field"><label htmlFor="phone">Mobile number</label><input id="phone" type="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+919876543210" required /></div>
-              <p className="muted text-small">Use the same number your store registered. You will also need the one-time access code provided by the store to link your account.</p>
+              <div className="field"><label htmlFor="customerEmail">Email address</label><input id="customerEmail" type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required /></div>
+              <p className="muted text-small">Use the same email address your store registered. You will also need the one-time access code provided by the store to link your account.</p>
               <button className="btn" type="submit" disabled={busy} style={{ width: "100%" }}>{busy ? "Sending…" : "Send OTP"}</button>
             </form> : <form onSubmit={verifyOtp}>
-              <div className="notice">OTP sent to {phone}. <button type="button" className="link-button" onClick={() => { setOtpSent(false); notify(""); }}>Change number</button></div>
+              <div className="notice">OTP sent to {email}. <button type="button" className="link-button" onClick={() => { setOtpSent(false); notify(""); }}>Change email</button></div>
               <div className="field"><label htmlFor="otp">6-digit OTP</label><input id="otp" name="otp" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required placeholder="Enter OTP" /></div>
               <button className="btn" type="submit" disabled={busy} style={{ width: "100%" }}>{busy ? "Verifying…" : "Verify and continue"}</button>
             </form>}

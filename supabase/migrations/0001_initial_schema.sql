@@ -22,11 +22,13 @@ create table if not exists public.customers (
   store_id uuid not null references public.stores(id) on delete restrict,
   user_id uuid references auth.users(id) on delete set null,
   name text not null check (char_length(trim(name)) between 1 and 120),
+  email text not null check (email = lower(btrim(email)) and position('@' in email) > 1),
   phone_e164 text not null check (left(phone_e164, 1) = '+' and substring(phone_e164 from 2) ~ '^[1-9][0-9]{7,14}$'),
   claim_code_hash text,
   claim_code_expires_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  unique (store_id, email),
   unique (store_id, phone_e164),
   unique (id, store_id)
 );
@@ -67,9 +69,9 @@ create table if not exists public.webhook_events (
   created_at timestamptz not null default now()
 );
 
--- Phone-level throttling for one-time store access-code claims.
+-- Email-level throttling for one-time store access-code claims.
 create table if not exists public.customer_claim_attempts (
-  phone_e164 text primary key,
+  email text primary key,
   attempt_count integer not null default 0 check (attempt_count >= 0),
   locked_until timestamptz,
   updated_at timestamptz not null default now()
@@ -198,8 +200,8 @@ with check (
   and public.owns_store(store_id)
 );
 
--- Service-role-only claim operation with phone-level brute-force throttling.
-create or replace function public.claim_customer_record(p_phone_e164 text, p_claim_hash text, p_user_id uuid)
+-- Service-role-only claim operation with email-level brute-force throttling.
+create or replace function public.claim_customer_record(p_email text, p_claim_hash text, p_user_id uuid)
 returns uuid
 language plpgsql
 security definer
@@ -208,16 +210,18 @@ as $$
 declare
   v_attempts public.customer_claim_attempts%rowtype;
   v_customer_id uuid;
+  v_email text := lower(btrim(p_email));
 begin
-  insert into public.customer_claim_attempts (phone_e164) values (p_phone_e164)
-  on conflict (phone_e164) do nothing;
-  select * into v_attempts from public.customer_claim_attempts where phone_e164 = p_phone_e164 for update;
+  if v_email is null or v_email = '' then return null; end if;
+  insert into public.customer_claim_attempts (email) values (v_email)
+  on conflict (email) do nothing;
+  select * into v_attempts from public.customer_claim_attempts where email = v_email for update;
   if v_attempts.locked_until is not null and v_attempts.locked_until > now() then
     return null;
   end if;
 
   select c.id into v_customer_id from public.customers c
-  where c.phone_e164 = p_phone_e164
+  where c.email = v_email
     and c.claim_code_hash = p_claim_hash
     and c.claim_code_expires_at > now()
     and c.user_id is null
@@ -230,7 +234,7 @@ begin
     set attempt_count = attempt_count + 1,
         locked_until = case when attempt_count + 1 >= 10 then now() + interval '1 hour' else null end,
         updated_at = now()
-    where phone_e164 = p_phone_e164;
+    where email = v_email;
     return null;
   end if;
 
@@ -239,7 +243,7 @@ begin
   where id = v_customer_id;
   update public.customer_claim_attempts
   set attempt_count = 0, locked_until = null, updated_at = now()
-  where phone_e164 = p_phone_e164;
+  where email = v_email;
   return v_customer_id;
 end;
 $$;

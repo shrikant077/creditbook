@@ -6,6 +6,3 @@ out
 .env.*.local
 coverage
 .DS_Store
-.env.example
-.env.*.example
-README.md
