@@ -79,8 +79,19 @@ export async function updateCustomerContactAction(_previous: ActionState, formDa
     if (!phone.success) return { error: phone.error.issues[0]?.message ?? "Enter a valid E.164 phone number." };
     await assertStoreOwner(supabase, storeId, user.id);
     const { data: customer, error: lookupError } = await supabase.from("customers")
-      .select("id,user_id").eq("id", customerId).eq("store_id", storeId).single();
+      .select("id,email,user_id").eq("id", customerId).eq("store_id", storeId).single();
     if (lookupError || !customer) throw new Error("Customer not found.");
+
+    // A phone-only edit must not break the customer's existing global account link.
+    if ((customer.email ?? "").trim().toLowerCase() === email.data) {
+      const { error } = await supabase.from("customers").update({ phone_e164: phone.data })
+        .eq("id", customerId).eq("store_id", storeId);
+      if (error?.code === "23505") return { error: "A customer with this phone number already exists in this store." };
+      if (error) throw error;
+      revalidatePath(`/dashboard/customers/${customerId}`);
+      revalidatePath("/dashboard");
+      return { success: "Phone number updated. The customer's existing shop link was preserved." };
+    }
 
     const code = generateClaimCode();
     const hash = hashClaimCode(email.data, code);
@@ -98,7 +109,7 @@ export async function updateCustomerContactAction(_previous: ActionState, formDa
     revalidatePath("/dashboard");
     revalidatePath(`/account/${customerId}`);
     revalidatePath("/account");
-    return { success: "Customer details updated and previous portal link reset. Share the new one-time access code.", claimCode: code };
+    return { success: "Email updated and this shop was unlinked from the previous CreditBook account. Share the new one-time access code to link it again.", claimCode: code };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not update customer details." };
   }

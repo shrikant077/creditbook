@@ -13,10 +13,14 @@ export async function claimCustomerRecordAction(_previous: ActionState, formData
     const { data, error } = await supabase.auth.getUser();
     const user = data.user;
     if (error || !user) return { error: "Please sign in again." };
-    if (!user.email || !user.email_confirmed_at) return { error: "A verified email address is required to claim a store record." };
+    if (!user.email) return { error: "Your account does not have an email address. Sign in with an email-based account." };
+
     const code = claimCodeSchema.safeParse(formData.get("claimCode"));
     if (!code.success) return { error: "Enter the 8-digit access code." };
 
+    // The access code is issued by this specific shop and is the authorization
+    // to link its customer record. Email ownership is not independently verified
+    // in this no-email-delivery signup flow.
     const email = user.email.trim().toLowerCase();
     const digest = hashClaimCode(email, code.data);
     const admin = createAdminClient();
@@ -26,10 +30,10 @@ export async function claimCustomerRecordAction(_previous: ActionState, formData
       p_user_id: user.id
     });
     if (claimError) throw claimError;
-    if (!customerId) return { error: "That code is invalid or expired, or too many attempts were made. Check the email address and try again later." };
+    if (!customerId) return { error: "That code is invalid or expired, or too many attempts were made. Check that the shop registered this same email address and try again later." };
     revalidatePath("/account");
-    return { success: "Store account linked. Your credit ledger is now available." };
+    return { success: "Shop linked successfully. Its credit ledger is now part of your CreditBook account." };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not claim this store account." };
+    return { error: error instanceof Error ? error.message : "Could not link this shop." };
   }
 }

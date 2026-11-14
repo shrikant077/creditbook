@@ -29,7 +29,7 @@ export default function HomePage() {
         <div className="eyebrow">Two sides, one ledger</div><h2>Designed for both the shop and the customer.</h2>
         <div className="feature-grid">
           <article className="feature"><div className="feature-icon">▦</div><h3>Store dashboard</h3><p>Add customers, record purchases on credit, see who owes what, and record cash or UPI payments received at the counter.</p></article>
-          <article className="feature"><div className="feature-icon">◉</div><h3>Customer portal</h3><p>Customers can verify their email with a one-time code, view itemised transactions and see their current outstanding balance.</p></article>
+          <article className="feature"><div className="feature-icon">◉</div><h3>Customer portal</h3><p>Customers create one CreditBook account, link each shop with its own access code, and view all their itemised balances in one place.</p></article>
           <article className="feature"><div className="feature-icon">↗</div><h3>Online settlement</h3><p>Customers can pay all or part of their dues online. Payments are verified by the server before the ledger changes.</p></article>
         </div>
       </section>
